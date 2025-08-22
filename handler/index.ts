@@ -1,8 +1,15 @@
 import { Emma } from "../emma";
-import { getFileDataById, sendChatAction, sendMessage } from "../methods";
+import {
+  getFileDataById,
+  sendChatAction,
+  sendFile,
+  sendMessage,
+} from "../methods";
 import { animation, audio, photo } from "../types";
 import { GoogleGenAI } from "@google/genai";
 import { getENV } from "../lib/env";
+import { TTS } from "../tts";
+import path from "path";
 
 const GEMINI_API_KEY = getENV({ key: "GEMINI_API_KEY" });
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
@@ -237,11 +244,31 @@ const handleAudio = async ({
       },
       caption,
     });
-    await sendMessage({
-      chatId,
-      messageText: response || "Oops! Something went wrong.",
+    if (!response) {
+      await sendMessage({
+        chatId,
+        messageText: response || "Oops! Something went wrong.",
+      });
+      return;
+    }
+    sendChatAction({ chatId, action: "record_voice" });
+    const res = await TTS({
+      fileName: `${chatId}.mp3`,
+      text: response,
     });
-    return;
+    if (res) {
+      sendChatAction({ chatId, action: "upload_voice" });
+      await sendFile({
+        chatId,
+        type: "audio",
+        filePath: `${path.resolve(__dirname, `../downloads/${chatId}.mp3`)}`,
+      });
+    } else {
+      await sendMessage({
+        chatId,
+        messageText: "Oops! Something went wrong.",
+      });
+    }
   } catch (error) {
     console.error(error);
     await sendMessage({ chatId, messageText: "Oops! Something went wrong." });
